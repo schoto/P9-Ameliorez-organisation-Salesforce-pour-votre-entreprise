@@ -1,0 +1,83 @@
+name: Deploy and Validate Metadata
+
+on:
+  pull_request:
+    branches:
+      - fftUAT
+      - production
+  push:
+    branches:
+      - fftUAT
+      - production
+
+jobs:
+  sfdxvalidate:
+    name: "Run SFDX Validate"
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # fetches the entire history
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install SFDX CLI and sfdx-git-delta plugin
+        run: |
+          npm install -g @salesforce/cli@latest
+          echo "y" | npm install sfdx-git-delta@3.3.0 -g
+
+      - name: 'Authenticate on CI1'
+        env:
+          SF_AUTH_URL_UAT: ${{ secrets.SF_AUTH_URL_CI_FFTUAT }}
+        run: |
+          sf config set disable-telemetry=true --global
+          echo "${{ env.SF_AUTH_URL_UAT }}" | sf org login sfdx-url --set-default --sfdx-url-stdin -
+
+      - name: 'Generate metadata delta pull request'
+        if: github.event_name == 'pull_request'
+        id: delta
+        run: |
+          mkdir ./temp
+          git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+          COMMIT_ID=$GITHUB_SHA
+          echo "Current commit ID: $COMMIT_ID"
+          sgd --generate-delta --to $GITHUB_SHA --from origin/${{ github.event.pull_request.base.ref }} --repo . --output ./temp -a 60.0
+          ls ./temp
+          echo "${{ github.event.pull_request.base.ref }}"
+          echo "${{ github.event.pull_request.head.ref }}"
+          cat ./temp/package/package.xml
+          cat ./temp/destructiveChanges/destructiveChanges.xml
+        shell: bash
+
+      - name: 'Generate metadata delta MERGING PR'
+        if: github.ref == 'refs/heads/fftUAT'
+        id: deltaMerged
+        run: |
+          mkdir ./temp
+          git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+          COMMIT_ID=$GITHUB_SHA
+          echo "Current commit ID: $COMMIT_ID"
+          sgd --generate-delta --to "HEAD" --from "HEAD~1" --repo . --output ./temp -a 60.0
+          ls ./temp
+          echo "--- package.xml generated with added and modified metadata ---"
+          cat ./temp/package/package.xml
+          cat ./temp/destructiveChanges/destructiveChanges.xml
+        shell: bash
+
+      - name: 'Deployment (validation only) on fftUAT'
+        if: github.event_name == 'pull_request' && github.base_ref == 'fftUAT'
+        run: |
+          sf project deploy validate --source-dir ./temp/force-app --wait 30 --json
+
+      - name: 'Deploy metadata delta to fftUAT'
+        if: github.ref == 'refs/heads/fftUAT'
+        run: |
+          sf project deploy start --source-dir ./temp/force-app --target-org anthony.moliere@fft.fr.fftuat --test-level RunLocalTests
