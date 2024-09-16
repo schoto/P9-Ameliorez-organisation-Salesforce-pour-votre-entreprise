@@ -17,7 +17,7 @@ cd [votre-repo]
 ```
 
 ### 2. Connexion à votre environnement Salesforce
-Si vous utilisez Salesforce DX, connectez-vous à votre organisation Salesforce.
+En Salesforce DX, connectez-vous à votre organisation Salesforce.
 
 ```bash
 sfdx force:auth:web:login -d -a [nom-de-votre-org]
