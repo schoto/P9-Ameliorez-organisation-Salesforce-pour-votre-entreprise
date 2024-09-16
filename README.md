@@ -36,3 +36,8 @@ Après le déploiement, connectez-vous à votre organisation Salesforce et véri
 ## Utilisation
 - Accédez aux objets **Clients** et **Produits** via votre environnement Salesforce pour effectuer des opérations CRUD.
 - Vous pouvez également accéder aux informations via des composants Lightning si nécessaire.
+
+## Ressources supplémentaires
+- [Salesforce Developer Documentation](https://developer.salesforce.com/docs)
+- [Guide d'utilisation de Salesforce CLI](https://developer.salesforce.com/tools/sfdxcli)
+
