@@ -17,25 +17,24 @@ cd [votre-repo]
 ```
 
 ### 2. Connexion à votre environnement Salesforce
-En utilisant Salesforce DX, connectez-vous à votre organisation Salesforce.
+En utilisant Salesforce DX, connectez-vous à votre organisation Salesforce. Voir documentation : https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_auth_web_flow.htm
 
 ```bash
-sfdx force:auth:web:login -d -a [nom-de-votre-org]
+sf org login web --alias my-org [nom-de-votre-org]
 ```
 
 ### 3. Déployer le projet sur Salesforce
-Une fois connecté, vous pouvez déployer le projet dans votre environnement Salesforce en exécutant la commande suivante :
+Une fois connecté, vous pouvez déployer le projet dans votre environnement Salesforce en exécutant la commande suivante (https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_push_md_to_scratch_org.htm) :
 
 ```bash
-sfdx force:source:push
+sf project deploy start
 ```
 
 ### 4. Vérification des objets
-Après le déploiement, connectez-vous à votre organisation Salesforce et vérifiez que les objets personnalisés pour les **clients** et **produits** sont créés.
+Après le déploiement, connectez-vous à votre organisation Salesforce et vérifiez que les champs personnalisés pour les **Commandes (Order)** et **Comptes  (Account)** sont créés. Veuillez vérifier également que les classes / triggers et le composant Lightning Web Components ont bien été créés.
 
 ## Utilisation
-- Accédez aux objets **Clients** et **Produits** via votre environnement Salesforce pour effectuer des opérations CRUD.
-- Vous pouvez également accéder aux informations via des composants Lightning si nécessaire.
+- Accédez aux objets et champs **Commandes** et **Comptes** dans votre environnement Salesforce, puis assurez-vous que les profils disposent des autorisations appropriées pour effectuer des opérations CRUD.
 
 ## Ressources supplémentaires
 - [Salesforce Developer Documentation](https://developer.salesforce.com/docs)
