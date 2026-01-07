@@ -1,0 +1,138 @@
+# Pipeline CI/CD pour déployer automatiquement le code Salesforce
+# Se déclenche sur push ou pull request vers les branches main et dev
+
+name: Deploy to Salesforce
+
+# Déclencheurs : le pipeline s'exécute sur push ou pull request vers main/dev
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  # Job 1 : Exécution des tests
+  # S'exécute à chaque push ou pull request
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Étape 1 : Récupère le code depuis GitHub
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      # Étape 2 : Installe Node.js (nécessaire pour npm et les dépendances)
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      # Étape 3 : Installe Salesforce CLI (outil pour interagir avec Salesforce)
+      - name: Setup Salesforce CLI
+        uses: salesforce-actions/setup-sfdx@v1
+        with:
+          sfdx-version: 'latest'
+      
+      # Étape 4 : Installe les dépendances npm (définies dans package.json)
+      - name: Install dependencies
+        run: npm ci
+      
+      # Étape 5 : Authentification à Salesforce
+      # Utilise les secrets GitHub pour se connecter (à configurer dans GitHub Settings > Secrets)
+      - name: Authenticate to Salesforce
+        env:
+          SF_USERNAME: ${{ secrets.SF_USERNAME }}
+          SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
+          SF_SECURITY_TOKEN: ${{ secrets.SF_SECURITY_TOKEN }}
+          SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
+        run: |
+          echo "$SF_LOGIN_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin \
+            --alias test-org \
+            --set-default-username "$SF_USERNAME"
+      
+      # Étape 6 : Exécute tous les tests unitaires Apex
+      # --test-level RunLocalTests : exécute tous les tests locaux
+      # --code-coverage : génère un rapport de couverture de code
+      - name: Run Apex Tests
+        run: |
+          sf apex run test \
+            --test-level RunLocalTests \
+            --code-coverage \
+            --result-format human \
+            --wait 10 \
+            --target-org test-org
+      
+      # Étape 7 : Génère un rapport de couverture de code
+      # if: always() : s'exécute même si les tests échouent
+      - name: Generate Test Coverage Report
+        if: always()
+        run: |
+          sf apex get test \
+            --code-coverage \
+            --result-format human \
+            --target-org test-org || true
+
+  # Job 2 : Déploiement vers Salesforce
+  # S'exécute uniquement si :
+  # - Les tests ont réussi (needs: test)
+  # - Le push est sur la branche main (pas dev)
+  # - C'est un push (pas une pull request)
+  deploy:
+    name: Deploy to Salesforce
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      # Étape 1 : Récupère le code depuis GitHub
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      # Étape 2 : Installe Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      # Étape 3 : Installe Salesforce CLI
+      - name: Setup Salesforce CLI
+        uses: salesforce-actions/setup-sfdx@v1
+        with:
+          sfdx-version: 'latest'
+      
+      # Étape 4 : Installe les dépendances npm
+      - name: Install dependencies
+        run: npm ci
+      
+      # Étape 5 : Authentification à Salesforce
+      - name: Authenticate to Salesforce
+        env:
+          SF_USERNAME: ${{ secrets.SF_USERNAME }}
+          SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
+          SF_SECURITY_TOKEN: ${{ secrets.SF_SECURITY_TOKEN }}
+          SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
+        run: |
+          echo "$SF_LOGIN_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin \
+            --alias deploy-org \
+            --set-default-username "$SF_USERNAME"
+      
+      # Étape 6 : Déploie le code vers Salesforce
+      # --test-level RunLocalTests : exécute les tests avant le déploiement
+      # --wait 10 : attend jusqu'à 10 minutes pour que le déploiement se termine
+      - name: Deploy to Salesforce
+        run: |
+          sf project deploy start \
+            --target-org deploy-org \
+            --test-level RunLocalTests \
+            --wait 10
+      
+      # Étape 7 : Vérifie le statut du déploiement
+      - name: Verify Deployment
+        run: |
+          sf project deploy report \
+            --target-org deploy-org

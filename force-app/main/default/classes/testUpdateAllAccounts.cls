@@ -1,28 +1,24 @@
+// Classe de test pour vérifier le scénario complet de création de commande
+// Utilise TestDataFactory pour créer un scénario complet avec compte, produit, commande et lignes
 @isTest
 private class testUpdateAllAccounts {
 
-    @isTest static void test() {
-        Account acc1 = new Account(Name = 'Test Account 1');
-        insert acc1;
-
-        Product2 pd1 = new Product2(Name = 'Chemise Verte longue XYX', Family = 'Chemise');
-        Insert pd1;
- 
-        //Create the PricebookEntry
-        PricebookEntry pbe = new PricebookEntry(
-            Pricebook2Id = Test.getStandardPricebookId(),
-            Product2Id = pd1.Id,
-            UnitPrice = 1020,
-            IsActive = true
-        );
-        Insert pbe;
-
-        Order o1 = new Order(AccountId = acc1.Id);
-        insert o1;
-
-        OrderItem oi1 = new OrderItem (OrderId = o1.Id, PricebookEntryId = pbe.Id, Quantity=10, UnitPrice = 150);
-        insert oi1;
-        OrderItem oi2 = new OrderItem (OrderId = o1.Id, PricebookEntryId = pbe.Id, Quantity=20, UnitPrice = 1000);
-        insert oi2;        
+    // Test : scénario complet avec une commande activée
+    // Vérifie que le trigger met à jour automatiquement le CA du compte
+    @isTest 
+    static void testCompleteOrderScenario() {
+        // Crée un scénario complet : compte, produit, prix, commande activée avec 2 lignes
+        Map<String, SObject> testData = TestDataFactory.createCompleteOrderScenario('Activated', 21500, 2);
+        
+        Account acc1 = (Account)testData.get('Account');
+        Order o1 = (Order)testData.get('Order');
+        
+        // Vérifie que la commande a été créée avec le bon statut
+        System.assertNotEquals(null, o1.Id);
+        System.assertEquals('Activated', o1.Status);
+        
+        // Vérifie que le trigger a mis à jour le CA du compte automatiquement
+        Account accAfter = [SELECT Chiffre_d_affaire__c FROM Account WHERE Id = :acc1.Id];
+        System.assertEquals(21500, accAfter.Chiffre_d_affaire__c);
     }
 }
