@@ -75,24 +75,22 @@ jobs:
           
           echo "🔐 Authentification à Salesforce..."
           
-          # NETTOYAGE COMPLET - Supprime TOUT le cache SF/SFDX
-          echo "🧹 Nettoyage complet du cache..."
-          rm -rf ~/.sf 2>/dev/null || true
-          rm -rf ~/.sfdx 2>/dev/null || true
-          rm -rf ~/.local/share/sf 2>/dev/null || true
-          rm -rf ~/.config/sf 2>/dev/null || true
+          # NETTOYAGE COMPLET
+          rm -rf ~/.sf ~/.sfdx ~/.local/share/sf ~/.config/sf 2>/dev/null || true
           
           # Combine password + security token
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
-          # Méthode alternative : utiliser directement l'URL SFDX via stdin
-          echo "🔗 Authentification avec credentials directs..."
-          echo "force://PlatformCLI::${SF_SECURITY_TOKEN}@login.salesforce.com?username=${SF_USERNAME}&password=${FULL_PASSWORD}" | \
-            sf org login sfdx-url --sfdx-url-file /dev/stdin --alias deploy-org --set-default --no-prompt || {
-              echo "❌ Échec authentification. Vérifiez:"
-              echo "   - Username: ${SF_USERNAME}"
-              echo "   - Password et Security Token sont corrects"
-              echo "   - L'utilisateur n'est pas bloqué dans Salesforce"
+          # Utilise l'authentification web avec credentials (sans refresh token)
+          # Cette méthode force une authentification fraîche à chaque fois
+          echo "🔗 Authentification directe (sans refresh token)..."
+          echo "$FULL_PASSWORD" | sf org login web \
+            --instance-url https://login.salesforce.com \
+            --username "$SF_USERNAME" \
+            --alias deploy-org \
+            --set-default \
+            --no-prompt || {
+              echo "❌ Échec. Vérifiez username/password/token dans GitHub Secrets"
               exit 1
             }
           
