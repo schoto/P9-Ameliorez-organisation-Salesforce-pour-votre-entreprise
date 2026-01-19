@@ -75,13 +75,11 @@ jobs:
           
           echo "🔐 Authentification à Salesforce..."
           
-          # Construit l'URL SFDX proprement (sans double https://)
+          # Construit l'URL SFDX proprement (format: force://PlatformCLI::TOKEN@URL?username=USER&password=PASS)
           LOGIN_URL="https://login.salesforce.com"
-          # Combine password + security token pour l'authentification
-          FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
-          # Construit l'URL SFDX complète
-          SFDX_URL="force://PlatformCLI::${FULL_PASSWORD}@${LOGIN_URL}?username=${SF_USERNAME}"
+          # Construit l'URL SFDX complète avec le bon format
+          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@${LOGIN_URL}?username=${SF_USERNAME}&password=${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
           echo "🔗 Authentification en cours..."
           
