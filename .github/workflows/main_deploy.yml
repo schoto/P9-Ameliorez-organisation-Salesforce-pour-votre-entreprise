@@ -66,6 +66,7 @@ jobs:
           SF_USERNAME: ${{ secrets.SF_USERNAME }}
           SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
           SF_SECURITY_TOKEN: ${{ secrets.SF_SECURITY_TOKEN }}
+          SF_INSTANCE_URL: ${{ secrets.SF_INSTANCE_URL }}
         run: |
           # Vérifie que les secrets sont configurés
           if [ -z "$SF_USERNAME" ] || [ -z "$SF_PASSWORD" ] || [ -z "$SF_SECURITY_TOKEN" ]; then
@@ -81,16 +82,17 @@ jobs:
           # Combine password + security token
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
-          # Utilise l'authentification web avec credentials (sans refresh token)
-          # Cette méthode force une authentification fraîche à chaque fois
-          echo "🔗 Authentification directe (sans refresh token)..."
-          echo "$FULL_PASSWORD" | sf org login web \
-            --instance-url https://login.salesforce.com \
-            --username "$SF_USERNAME" \
-            --alias deploy-org \
-            --set-default \
-            --no-prompt || {
-              echo "❌ Échec. Vérifiez username/password/token dans GitHub Secrets"
+          # Détermine l'URL d'instance (utilise celle fournie ou login.salesforce.com par défaut)
+          INSTANCE_URL="${SF_INSTANCE_URL:-https://login.salesforce.com}"
+          # Nettoie l'URL (enlève le trailing slash)
+          INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|/$||')
+          
+          # Utilise sfdx-url avec la bonne instance URL
+          echo "🔗 Authentification avec instance: $INSTANCE_URL"
+          echo "force://PlatformCLI::${SF_SECURITY_TOKEN}@${INSTANCE_URL}?username=${SF_USERNAME}&password=${FULL_PASSWORD}" | \
+            sf org login sfdx-url --sfdx-url-file /dev/stdin --alias deploy-org --set-default --no-prompt || {
+              echo "❌ Échec authentification"
+              echo "💡 Vérifiez: username, password, security token, et instance URL"
               exit 1
             }
           
