@@ -75,50 +75,28 @@ jobs:
           
           echo "🔐 Authentification à Salesforce..."
           
-          # Nettoie complètement toutes les orgs existantes et le cache
-          echo "🧹 Nettoyage des orgs et tokens existants..."
-          sf org list --all 2>/dev/null | grep -q deploy-org && sf org delete --target-org deploy-org --no-prompt 2>/dev/null || true
+          # NETTOYAGE COMPLET - Supprime TOUT le cache SF/SFDX
+          echo "🧹 Nettoyage complet du cache..."
+          rm -rf ~/.sf 2>/dev/null || true
+          rm -rf ~/.sfdx 2>/dev/null || true
+          rm -rf ~/.local/share/sf 2>/dev/null || true
+          rm -rf ~/.config/sf 2>/dev/null || true
           
-          # Supprime le cache des tokens (force une authentification fraîche)
-          rm -rf ~/.sf/orgs/deploy-org 2>/dev/null || true
-          rm -rf ~/.local/share/sf/orgs/deploy-org 2>/dev/null || true
-          
-          # Combine password + security token (requis pour l'authentification)
+          # Combine password + security token
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
-          # Crée un fichier temporaire avec l'URL SFDX correctement formatée
-          # Format correct pour sf CLI: force://PlatformCLI::SECURITY_TOKEN@login.salesforce.com?username=USER&password=PASS+TOKEN
-          # Note: PlatformCLI est le client ID par défaut pour username/password auth
-          SFDX_FILE=$(mktemp)
-          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@login.salesforce.com?username=${SF_USERNAME}&password=${FULL_PASSWORD}"
-          echo "$SFDX_URL" > "$SFDX_FILE"
-          
-          echo "🔗 Authentification en cours (session fraîche)..."
-          echo "📋 Format URL: force://PlatformCLI::***@login.salesforce.com?username=${SF_USERNAME}&password=***"
-          
-          # Force une authentification complètement nouvelle
-          # Utilise --no-prompt pour éviter les interactions
-          sf org login sfdx-url \
-            --sfdx-url-file "$SFDX_FILE" \
-            --alias deploy-org \
-            --set-default \
-            --no-prompt || {
-              echo "❌ Erreur d'authentification."
-              echo "💡 Solutions possibles:"
-              echo "   1. Vérifiez que SF_USERNAME, SF_PASSWORD et SF_SECURITY_TOKEN sont corrects"
-              echo "   2. Régénérez le Security Token dans Salesforce (Setup → My Personal Information → Reset My Security Token)"
-              echo "   3. Vérifiez que l'utilisateur n'est pas bloqué ou désactivé"
-              rm -f "$SFDX_FILE"
+          # Méthode alternative : utiliser directement l'URL SFDX via stdin
+          echo "🔗 Authentification avec credentials directs..."
+          echo "force://PlatformCLI::${SF_SECURITY_TOKEN}@login.salesforce.com?username=${SF_USERNAME}&password=${FULL_PASSWORD}" | \
+            sf org login sfdx-url --sfdx-url-file /dev/stdin --alias deploy-org --set-default --no-prompt || {
+              echo "❌ Échec authentification. Vérifiez:"
+              echo "   - Username: ${SF_USERNAME}"
+              echo "   - Password et Security Token sont corrects"
+              echo "   - L'utilisateur n'est pas bloqué dans Salesforce"
               exit 1
             }
           
-          # Nettoie le fichier temporaire
-          rm -f "$SFDX_FILE"
-          
           echo "✅ Authentification réussie"
-          
-          echo "✅ Authentification réussie"
-          # Vérifie la connexion
           sf org display --target-org deploy-org
 
       # Étape 5 : Génère le delta des métadonnées modifiées
