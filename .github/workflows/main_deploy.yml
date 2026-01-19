@@ -78,7 +78,7 @@ jobs:
           # Utilise l'URL de connexion SFDX pour s'authentifier
           echo "$SF_LOGIN_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin \
             --alias deploy-org \
-            --set-default-username "$SF_USERNAME" || {
+            --set-default || {
               echo "❌ Erreur d'authentification. Vérifiez vos secrets GitHub."
               exit 1
             }
