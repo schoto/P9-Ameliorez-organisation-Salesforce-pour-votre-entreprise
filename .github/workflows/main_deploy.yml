@@ -69,17 +69,29 @@ jobs:
           SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
         run: |
           # Vérifie que les secrets sont configurés
-          if [ -z "$SF_LOGIN_URL" ]; then
-            echo "❌ Erreur: SF_LOGIN_URL n'est pas configuré dans les secrets GitHub"
+          if [ -z "$SF_USERNAME" ] || [ -z "$SF_PASSWORD" ] || [ -z "$SF_SECURITY_TOKEN" ]; then
+            echo "❌ Erreur: Les secrets SF_USERNAME, SF_PASSWORD ou SF_SECURITY_TOKEN ne sont pas configurés"
             exit 1
           fi
           
           echo "🔐 Authentification à Salesforce..."
-          # Utilise l'URL de connexion SFDX pour s'authentifier
-          echo "$SF_LOGIN_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin \
+          
+          # Construit l'URL SFDX correctement
+          LOGIN_URL="${SF_LOGIN_URL:-https://login.salesforce.com}"
+          # Nettoie l'URL pour éviter les doubles https://
+          LOGIN_URL=$(echo "$LOGIN_URL" | sed 's|^https://https://|https://|' | sed 's|^http://https://|https://|')
+          
+          # Construit l'URL SFDX complète
+          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@${LOGIN_URL}?username=${SF_USERNAME}&password=${SF_PASSWORD}"
+          
+          echo "🔗 URL SFDX construite (masquée pour sécurité)"
+          
+          # Utilise l'URL SFDX pour s'authentifier
+          echo "$SFDX_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin \
             --alias deploy-org \
             --set-default || {
               echo "❌ Erreur d'authentification. Vérifiez vos secrets GitHub."
+              echo "💡 Vérifiez que SF_USERNAME, SF_PASSWORD, SF_SECURITY_TOKEN sont corrects"
               exit 1
             }
           
