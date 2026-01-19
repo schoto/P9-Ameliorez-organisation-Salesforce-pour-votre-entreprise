@@ -285,11 +285,8 @@ jobs:
               --wait 10
           fi
           
-          # Vérifie le rapport de déploiement
-          echo "📊 Rapport de déploiement:"
-          sf project deploy report \
-            --use-most-recent \
-            --target-org deploy-org || true
+          # Le rapport de déploiement est déjà affiché par --wait 10
+          echo "✅ Déploiement terminé avec succès"
 
       # Étape 9 : Génère un rapport de couverture de code (s'exécute toujours)
       - name: Generate Test Coverage Report
