@@ -87,21 +87,27 @@ jobs:
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
           # Crée un fichier temporaire avec l'URL SFDX correctement formatée
-          # Format: force://PlatformCLI::TOKEN@login.salesforce.com?username=USER&password=PASS+TOKEN
+          # Format correct pour sf CLI: force://PlatformCLI::SECURITY_TOKEN@login.salesforce.com?username=USER&password=PASS+TOKEN
+          # Note: PlatformCLI est le client ID par défaut pour username/password auth
           SFDX_FILE=$(mktemp)
-          echo "force://PlatformCLI::${SF_SECURITY_TOKEN}@login.salesforce.com?username=${SF_USERNAME}&password=${FULL_PASSWORD}" > "$SFDX_FILE"
+          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@login.salesforce.com?username=${SF_USERNAME}&password=${FULL_PASSWORD}"
+          echo "$SFDX_URL" > "$SFDX_FILE"
           
           echo "🔗 Authentification en cours (session fraîche)..."
+          echo "📋 Format URL: force://PlatformCLI::***@login.salesforce.com?username=${SF_USERNAME}&password=***"
           
           # Force une authentification complètement nouvelle
-          sf org login sfdx-url --sfdx-url-file "$SFDX_FILE" \
+          # Utilise --no-prompt pour éviter les interactions
+          sf org login sfdx-url \
+            --sfdx-url-file "$SFDX_FILE" \
             --alias deploy-org \
             --set-default \
-            --no-prompt \
-            --json || {
-              echo "❌ Erreur d'authentification. Vérifiez vos secrets GitHub."
-              echo "💡 Vérifiez que SF_USERNAME, SF_PASSWORD et SF_SECURITY_TOKEN sont corrects"
-              echo "📋 Contenu de l'URL SFDX (masqué): force://PlatformCLI::***@login.salesforce.com?username=${SF_USERNAME}&password=***"
+            --no-prompt || {
+              echo "❌ Erreur d'authentification."
+              echo "💡 Solutions possibles:"
+              echo "   1. Vérifiez que SF_USERNAME, SF_PASSWORD et SF_SECURITY_TOKEN sont corrects"
+              echo "   2. Régénérez le Security Token dans Salesforce (Setup → My Personal Information → Reset My Security Token)"
+              echo "   3. Vérifiez que l'utilisateur n'est pas bloqué ou désactivé"
               rm -f "$SFDX_FILE"
               exit 1
             }
