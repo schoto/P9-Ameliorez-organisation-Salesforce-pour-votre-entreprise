@@ -288,7 +288,8 @@ jobs:
           # Vérifie le rapport de déploiement
           echo "📊 Rapport de déploiement:"
           sf project deploy report \
-            --target-org deploy-org
+            --use-most-recent \
+            --target-org deploy-org || true
 
       # Étape 9 : Génère un rapport de couverture de code (s'exécute toujours)
       - name: Generate Test Coverage Report
