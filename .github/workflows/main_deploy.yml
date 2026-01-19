@@ -83,14 +83,16 @@ jobs:
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
           # Détermine l'URL d'instance (utilise celle fournie ou login.salesforce.com par défaut)
-          INSTANCE_URL="${SF_INSTANCE_URL:-https://login.salesforce.com}"
-          # Nettoie l'URL (enlève le trailing slash)
-          INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|/$||')
+          INSTANCE_URL="${SF_INSTANCE_URL:-login.salesforce.com}"
+          # Nettoie l'URL : enlève https://, http://, et trailing slash
+          INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
           
-          # Utilise sfdx-url avec la bonne instance URL
+          # Construit l'URL SFDX - IMPORTANT: pas de https:// dans l'URL de base pour sfdx-url
+          # Format: force://PlatformCLI::TOKEN@DOMAIN?username=USER&password=PASS
+          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@${INSTANCE_URL}?username=${SF_USERNAME}&password=${FULL_PASSWORD}"
+          
           echo "🔗 Authentification avec instance: $INSTANCE_URL"
-          echo "force://PlatformCLI::${SF_SECURITY_TOKEN}@${INSTANCE_URL}?username=${SF_USERNAME}&password=${FULL_PASSWORD}" | \
-            sf org login sfdx-url --sfdx-url-file /dev/stdin --alias deploy-org --set-default --no-prompt || {
+          echo "$SFDX_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin --alias deploy-org --set-default --no-prompt || {
               echo "❌ Échec authentification"
               echo "💡 Vérifiez: username, password, security token, et instance URL"
               exit 1
