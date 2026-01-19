@@ -75,6 +75,9 @@ jobs:
           
           echo "🔐 Authentification à Salesforce..."
           
+          # Supprime l'org existante si elle existe (pour éviter les tokens expirés)
+          sf org delete --target-org deploy-org --no-prompt 2>/dev/null || true
+          
           # Combine password + security token (requis pour l'authentification)
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
@@ -83,13 +86,15 @@ jobs:
           SFDX_FILE=$(mktemp)
           echo "force://PlatformCLI::${SF_SECURITY_TOKEN}@login.salesforce.com?username=${SF_USERNAME}&password=${FULL_PASSWORD}" > "$SFDX_FILE"
           
-          echo "🔗 Authentification en cours..."
+          echo "🔗 Authentification en cours (nouvelle session)..."
           
-          # Utilise le fichier pour s'authentifier
+          # Utilise le fichier pour s'authentifier avec --no-prompt pour éviter les interactions
           sf org login sfdx-url --sfdx-url-file "$SFDX_FILE" \
             --alias deploy-org \
-            --set-default || {
+            --set-default \
+            --no-prompt || {
               echo "❌ Erreur d'authentification. Vérifiez vos secrets GitHub."
+              echo "💡 Vérifiez que SF_USERNAME, SF_PASSWORD et SF_SECURITY_TOKEN sont corrects"
               rm -f "$SFDX_FILE"
               exit 1
             }
