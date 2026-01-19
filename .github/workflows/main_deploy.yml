@@ -42,8 +42,22 @@ jobs:
       # sfdx-git-delta permet de déployer uniquement les fichiers modifiés (delta)
       - name: Install SFDX CLI and sfdx-git-delta plugin
         run: |
+          echo "📦 Installation de Salesforce CLI..."
           npm install -g @salesforce/cli@latest
-          echo "y" | npm install sfdx-git-delta@3.3.0 -g
+          
+          echo "📦 Installation de sfdx-git-delta..."
+          # Installe sfdx-git-delta comme plugin Salesforce CLI
+          sf plugins install sfdx-git-delta@latest || {
+            echo "⚠️ Installation via plugin échouée, tentative via npm..."
+            npm install -g sfdx-git-delta@latest || {
+              echo "❌ Impossible d'installer sfdx-git-delta"
+              exit 1
+            }
+          }
+          
+          echo "✅ Installation terminée"
+          # Vérifie que la commande est disponible
+          sf sgd --version || sfdx sgd --version || echo "⚠️ Commande sgd non disponible, déploiement complet sera utilisé"
 
       # Étape 4 : Authentification à Salesforce
       # Utilise les secrets GitHub pour se connecter à Salesforce
@@ -54,16 +68,31 @@ jobs:
           SF_SECURITY_TOKEN: ${{ secrets.SF_SECURITY_TOKEN }}
           SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
         run: |
+          # Vérifie que les secrets sont configurés
+          if [ -z "$SF_LOGIN_URL" ]; then
+            echo "❌ Erreur: SF_LOGIN_URL n'est pas configuré dans les secrets GitHub"
+            exit 1
+          fi
+          
+          echo "🔐 Authentification à Salesforce..."
           # Utilise l'URL de connexion SFDX pour s'authentifier
           echo "$SF_LOGIN_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin \
             --alias deploy-org \
-            --set-default-username "$SF_USERNAME"
+            --set-default-username "$SF_USERNAME" || {
+              echo "❌ Erreur d'authentification. Vérifiez vos secrets GitHub."
+              exit 1
+            }
+          
+          echo "✅ Authentification réussie"
+          # Vérifie la connexion
+          sf org display --target-org deploy-org
 
       # Étape 5 : Génère le delta des métadonnées modifiées
       # Compare les fichiers entre la branche actuelle et main
       # Génère un package.xml avec uniquement les fichiers modifiés
       - name: Generate metadata delta
         id: delta
+        continue-on-error: true
         run: |
           # Crée un répertoire temporaire pour le package.xml
           mkdir -p .temp/package
@@ -74,34 +103,52 @@ jobs:
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           else
-            # Pour un push, compare avec le commit précédent
-            BASE_SHA=$(git rev-parse HEAD~1)
+            # Pour un push, compare avec le commit précédent (ou origin/main si c'est le premier commit)
+            BASE_SHA=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse origin/main 2>/dev/null || echo "")
             HEAD_SHA="${{ github.sha }}"
+          fi
+          
+          if [ -z "$BASE_SHA" ]; then
+            echo "⚠️ Pas de commit précédent, déploiement de tout le projet"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "use_full_deploy=true" >> $GITHUB_OUTPUT
+            exit 0
           fi
           
           echo "🔍 Comparaison: $BASE_SHA -> $HEAD_SHA"
           
           # Génère le package.xml avec sfdx-git-delta
-          # La commande sgd:source:delta génère le delta des métadonnées
-          sf sgd:source:delta \
-            --to "$HEAD_SHA" \
-            --from "$BASE_SHA" \
-            --output .temp/package \
-            --generate-delta || {
-              echo "⚠️ Erreur lors de la génération du delta, tentative alternative..."
-              # Alternative: déployer tout le projet si le delta échoue
+          # Essaie d'abord avec la commande sf sgd
+          if sf sgd:source:delta --to "$HEAD_SHA" --from "$BASE_SHA" --output .temp/package --generate-delta 2>/dev/null; then
+            echo "✅ Delta généré avec succès"
+          else
+            echo "⚠️ Erreur avec sf sgd, tentative avec sfdx sgd..."
+            # Alternative: essayer avec sfdx si sf ne fonctionne pas
+            if command -v sfdx &> /dev/null; then
+              sfdx sgd:source:delta --to "$HEAD_SHA" --from "$BASE_SHA" --output .temp/package --generate-delta || {
+                echo "⚠️ Erreur lors de la génération du delta, déploiement complet"
+                echo "has_changes=true" >> $GITHUB_OUTPUT
+                echo "use_full_deploy=true" >> $GITHUB_OUTPUT
+                exit 0
+              }
+            else
+              echo "⚠️ sfdx-git-delta non disponible, déploiement complet"
               echo "has_changes=true" >> $GITHUB_OUTPUT
+              echo "use_full_deploy=true" >> $GITHUB_OUTPUT
               exit 0
-            }
+            fi
+          fi
           
           # Vérifie si des fichiers ont été modifiés
           if [ -f .temp/package/package.xml ] && [ -s .temp/package/package.xml ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "use_full_deploy=false" >> $GITHUB_OUTPUT
             echo "✅ Métadonnées modifiées détectées"
             echo "📦 Contenu du package.xml:"
             cat .temp/package/package.xml
           else
             echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "use_full_deploy=false" >> $GITHUB_OUTPUT
             echo "⚠️ Aucune métadonnée modifiée"
           fi
 
@@ -143,28 +190,27 @@ jobs:
       - name: Déployer les métadonnées sur la branch main
         if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.delta.outputs.has_changes == 'true'
         run: |
-          # Déploie les métadonnées modifiées depuis le package généré
-          if [ -f .temp/package/package.xml ]; then
-            echo "🚀 Déploiement des métadonnées modifiées..."
-            sf project deploy start \
-              --source-dir .temp/package \
-              --target-org deploy-org \
-              --test-level RunLocalTests \
-              --wait 10
-            
-            # Vérifie le rapport de déploiement
-            echo "📊 Rapport de déploiement:"
-            sf project deploy report \
-              --target-org deploy-org
-          else
-            echo "⚠️ Aucun package.xml trouvé, déploiement de tout le projet..."
-            # Alternative: déployer tout le projet si le delta n'a pas fonctionné
+          # Vérifie si on doit déployer tout le projet ou juste le delta
+          if [ "${{ steps.delta.outputs.use_full_deploy }}" == "true" ] || [ ! -f .temp/package/package.xml ]; then
+            echo "🚀 Déploiement complet du projet..."
             sf project deploy start \
               --source-dir force-app \
               --target-org deploy-org \
               --test-level RunLocalTests \
               --wait 10
+          else
+            echo "🚀 Déploiement des métadonnées modifiées (delta)..."
+            sf project deploy start \
+              --source-dir .temp/package \
+              --target-org deploy-org \
+              --test-level RunLocalTests \
+              --wait 10
           fi
+          
+          # Vérifie le rapport de déploiement
+          echo "📊 Rapport de déploiement:"
+          sf project deploy report \
+            --target-org deploy-org
 
       # Étape 9 : Génère un rapport de couverture de code (s'exécute toujours)
       - name: Generate Test Coverage Report
