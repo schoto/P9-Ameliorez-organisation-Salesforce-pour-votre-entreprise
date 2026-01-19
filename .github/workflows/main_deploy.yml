@@ -84,18 +84,20 @@ jobs:
           # Combine password + security token
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
-          # Détermine l'URL d'instance
-          # Pour les orgs personnalisées, utilise l'URL fournie, sinon login.salesforce.com
+          # IMPORTANT: Pour obtenir le token OAuth2, utilise TOUJOURS login.salesforce.com
+          # Même si l'org a une URL personnalisée, le token doit être obtenu depuis login.salesforce.com
+          TOKEN_URL="https://login.salesforce.com/services/oauth2/token"
+          
+          # L'instance URL personnalisée sera utilisée après obtention du token
           if [ -n "$SF_INSTANCE_URL" ]; then
             INSTANCE_URL="$SF_INSTANCE_URL"
           else
             INSTANCE_URL="login.salesforce.com"
           fi
-          # Nettoie l'URL
           INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
-          LOGIN_URL="https://${INSTANCE_URL}"
           
-          echo "📍 Instance URL utilisée: $LOGIN_URL"
+          echo "📍 Token URL: $TOKEN_URL"
+          echo "📍 Instance URL: https://${INSTANCE_URL}"
           
           echo "🔗 Authentification OAuth2..."
           
@@ -115,11 +117,12 @@ jobs:
           CLIENT_SECRET=$(echo "$CLIENT_SECRET" | tr -d '[:space:]')
           
           echo "🔍 Vérification des paramètres..."
-          echo "   Instance URL: $LOGIN_URL"
           echo "   Username: ${SF_USERNAME}"
-          echo "   Consumer Key: ${CLIENT_ID:0:20}..." # Affiche seulement les 20 premiers caractères
+          echo "   Consumer Key: ${CLIENT_ID:0:20}..."
+          echo "   Password+Token: ${FULL_PASSWORD:0:5}..." # Affiche seulement les 5 premiers caractères
           
-          TOKEN_RESPONSE=$(curl -s -X POST "${LOGIN_URL}/services/oauth2/token" \
+          # Utilise TOUJOURS login.salesforce.com pour obtenir le token
+          TOKEN_RESPONSE=$(curl -s -X POST "${TOKEN_URL}" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=password" \
             -d "client_id=${CLIENT_ID}" \
@@ -134,8 +137,11 @@ jobs:
             [ -z "$ACCESS_TOKEN" ] && { echo "❌ Impossible d'extraire access_token"; echo "$TOKEN_RESPONSE"; exit 1; }
             
             echo "✅ Token obtenu"
+            # Utilise l'instance URL depuis le token ou celle fournie
+            FINAL_INSTANCE_URL="${INSTANCE_URL_FROM_TOKEN:-https://${INSTANCE_URL}}"
+            echo "📍 Instance URL finale: $FINAL_INSTANCE_URL"
             sf org login access-token \
-              --instance-url "${INSTANCE_URL_FROM_TOKEN:-$LOGIN_URL}" \
+              --instance-url "$FINAL_INSTANCE_URL" \
               --access-token "$ACCESS_TOKEN" \
               --alias deploy-org \
               --set-default || exit 1
