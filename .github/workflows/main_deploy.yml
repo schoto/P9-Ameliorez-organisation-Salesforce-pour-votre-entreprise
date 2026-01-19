@@ -87,33 +87,47 @@ jobs:
           INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
           LOGIN_URL="https://${INSTANCE_URL}"
           
-          echo "🔗 Authentification web directe (sans refresh token)..."
+          echo "🔗 Authentification avec sfdx-url (méthode finale)..."
           
-          # Utilise sf org login web avec credentials directs
-          # Cette méthode ne crée PAS de refresh token si on utilise --no-prompt correctement
-          echo "$FULL_PASSWORD" | sf org login web \
-            --instance-url "$LOGIN_URL" \
-            --username "$SF_USERNAME" \
-            --alias deploy-org \
-            --set-default \
-            --no-prompt 2>&1 | tee /tmp/sf-login.log || {
-              LOG_OUTPUT=$(cat /tmp/sf-login.log 2>/dev/null || echo "")
-              echo "❌ Échec authentification web"
-              echo "Log: $LOG_OUTPUT"
-              echo ""
-              echo "💡 Si l'erreur mentionne 'client-app', il faut créer un Connected App dans Salesforce"
-              echo "💡 Ou activer SOAP API dans Setup → API → Enable SOAP API"
-              exit 1
-            }
+          # Construit l'URL SFDX correctement formatée
+          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@${INSTANCE_URL}?username=${SF_USERNAME}&password=${FULL_PASSWORD}"
           
-          # Vérifie que l'org est bien authentifiée
-          if ! sf org display --target-org deploy-org &>/dev/null; then
-            echo "❌ L'org deploy-org n'est pas correctement authentifiée"
-            sf org list
-            exit 1
+          # Essaie d'abord avec sfdx (ancien CLI) si disponible, sinon sf
+          if command -v sfdx &> /dev/null; then
+            echo "📋 Utilisation de sfdx (legacy)..."
+            echo "$SFDX_URL" | sfdx auth:sfdxurl:store \
+              --sfdxurlfile /dev/stdin \
+              --setdefaultusername "$SF_USERNAME" \
+              --setalias deploy-org || {
+                echo "❌ Échec avec sfdx, tentative avec sf..."
+                # Fallback sur sf
+                echo "$SFDX_URL" | sf org login sfdx-url \
+                  --sfdx-url-file /dev/stdin \
+                  --alias deploy-org \
+                  --set-default \
+                  --no-prompt || {
+                    echo "❌ Échec authentification"
+                    exit 1
+                  }
+              }
+          else
+            echo "📋 Utilisation de sf CLI..."
+            # Force vraiment une nouvelle authentification en supprimant TOUT
+            rm -rf ~/.config/sf/orgs/deploy-org 2>/dev/null || true
+            rm -rf ~/.local/share/sf/orgs/deploy-org 2>/dev/null || true
+            
+            echo "$SFDX_URL" | sf org login sfdx-url \
+              --sfdx-url-file /dev/stdin \
+              --alias deploy-org \
+              --set-default \
+              --no-prompt || {
+                echo "❌ Échec authentification"
+                exit 1
+              }
           fi
           
-          echo "✅ Authentification réussie et vérifiée"
+          echo "✅ Authentification réussie"
+          sf org display --target-org deploy-org
           
           echo "✅ Authentification réussie"
           sf org display --target-org deploy-org
