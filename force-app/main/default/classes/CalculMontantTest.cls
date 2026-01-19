@@ -8,18 +8,31 @@ private class CalculMontantTest {
     @isTest
     static void testCalculMontant_SingleOrder() {
         Account acc = TestDataFactory.createAccount('Test Account', true);
-        Order ord = TestDataFactory.createOrder(acc.Id, 'Draft', 1000, 50, Date.today(), true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
+        Order ord = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        
+        // Crée un OrderItem pour que TotalAmount soit calculé automatiquement
+        OrderItem oi = new OrderItem(
+            OrderId = ord.Id,
+            PricebookEntryId = pbe.Id,
+            Quantity = 15,
+            UnitPrice = 100
+        );
+        insert oi;
+        
+        // Récupère la commande avec le TotalAmount calculé
+        ord = [SELECT TotalAmount FROM Order WHERE Id = :ord.Id];
         
         Test.startTest();
-        // Modifie les montants pour déclencher le calcul
-        ord.TotalAmount = 1500;
+        // Modifie seulement ShipmentCost pour déclencher le calcul de NetAmount
         ord.ShipmentCost__c = 100;
         update ord;
         Test.stopTest();
         
         // Vérifie que NetAmount = 1500 - 100 = 1400
-        Order ordAfter = [SELECT NetAmount__c FROM Order WHERE Id = :ord.Id];
-        System.assertEquals(1400, ordAfter.NetAmount__c);
+        Order ordAfter = [SELECT NetAmount__c, TotalAmount FROM Order WHERE Id = :ord.Id];
+        System.assertEquals(ordAfter.TotalAmount - 100, ordAfter.NetAmount__c);
     }
     
     // Test : calcul du montant net en traitement bulk (plusieurs commandes)
@@ -27,13 +40,30 @@ private class CalculMontantTest {
     @isTest
     static void testCalculMontant_BulkProcessing() {
         Account acc = TestDataFactory.createAccount('Test Account', true);
-        List<Order> orders = TestDataFactory.createOrders(acc.Id, 5, 'Draft', true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
+        
+        // Crée plusieurs commandes avec OrderItems pour avoir des TotalAmount différents
+        List<Order> orders = new List<Order>();
+        for (Integer i = 0; i < 5; i++) {
+            Order ord = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+            OrderItem oi = new OrderItem(
+                OrderId = ord.Id,
+                PricebookEntryId = pbe.Id,
+                Quantity = 10 + i,
+                UnitPrice = 100
+            );
+            insert oi;
+            orders.add(ord);
+        }
+        
+        // Récupère les commandes avec TotalAmount calculé
+        orders = [SELECT Id, TotalAmount FROM Order WHERE Id IN :orders];
         
         Test.startTest();
-        // Modifie les montants de toutes les commandes
-        for (Integer i = 0; i < orders.size(); i++) {
-            orders[i].TotalAmount = 1000 + (i * 100);
-            orders[i].ShipmentCost__c = 50;
+        // Modifie seulement ShipmentCost pour toutes les commandes
+        for (Order ord : orders) {
+            ord.ShipmentCost__c = 50;
         }
         update orders;
         Test.stopTest();

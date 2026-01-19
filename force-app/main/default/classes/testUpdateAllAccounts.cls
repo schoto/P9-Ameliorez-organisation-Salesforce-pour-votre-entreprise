@@ -7,15 +7,20 @@ private class testUpdateAllAccounts {
     // Vérifie que le trigger met à jour automatiquement le CA du compte
     @isTest 
     static void testCompleteOrderScenario() {
-        // Crée un scénario complet : compte, produit, prix, commande activée avec 2 lignes
-        Map<String, SObject> testData = TestDataFactory.createCompleteOrderScenario('Activated', 21500, 2);
+        // Crée un scénario complet : compte, produit, prix, commande en Draft avec 2 lignes
+        Map<String, SObject> testData = TestDataFactory.createCompleteOrderScenario('Draft', 21500, 2);
         
         Account acc1 = (Account)testData.get('Account');
         Order o1 = (Order)testData.get('Order');
         
-        // Vérifie que la commande a été créée avec le bon statut
+        // Active la commande pour déclencher le trigger
+        o1.Status = 'Activated';
+        update o1;
+        
+        // Vérifie que la commande a été activée
         System.assertNotEquals(null, o1.Id);
-        System.assertEquals('Activated', o1.Status);
+        Order o1After = [SELECT Status FROM Order WHERE Id = :o1.Id];
+        System.assertEquals('Activated', o1After.Status);
         
         // Vérifie que le trigger a mis à jour le CA du compte automatiquement
         Account accAfter = [SELECT Chiffre_d_affaire__c FROM Account WHERE Id = :acc1.Id];

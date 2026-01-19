@@ -7,7 +7,18 @@ private class AccountRevenueHandlerTest {
     @isTest
     static void testUpdateAccountRevenue_SingleOrder() {
         Account acc = TestDataFactory.createAccount('Test Account', true);
-        Order ord = TestDataFactory.createOrder(acc.Id, 'Draft', 1000, 50, Date.today(), true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
+        Order ord = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        
+        // Crée un OrderItem pour que TotalAmount soit calculé (10 * 100 = 1000)
+        OrderItem oi = new OrderItem(
+            OrderId = ord.Id,
+            PricebookEntryId = pbe.Id,
+            Quantity = 10,
+            UnitPrice = 100
+        );
+        insert oi;
         
         Test.startTest();
         // Active la commande pour déclencher le trigger
@@ -24,9 +35,19 @@ private class AccountRevenueHandlerTest {
     @isTest
     static void testUpdateAccountRevenue_MultipleOrders() {
         Account acc = TestDataFactory.createAccount('Test Account', true);
-        Order ord1 = TestDataFactory.createOrder(acc.Id, 'Draft', 1000, 50, Date.today(), true);
-        Order ord2 = TestDataFactory.createOrder(acc.Id, 'Draft', 2000, 50, Date.today(), true);
-        Order ord3 = TestDataFactory.createOrder(acc.Id, 'Draft', 3000, 50, Date.today(), true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
+        
+        Order ord1 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        Order ord2 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        Order ord3 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        
+        // Crée des OrderItems pour chaque commande
+        insert new List<OrderItem>{
+            new OrderItem(OrderId = ord1.Id, PricebookEntryId = pbe.Id, Quantity = 10, UnitPrice = 100),
+            new OrderItem(OrderId = ord2.Id, PricebookEntryId = pbe.Id, Quantity = 20, UnitPrice = 100),
+            new OrderItem(OrderId = ord3.Id, PricebookEntryId = pbe.Id, Quantity = 30, UnitPrice = 100)
+        };
         
         Test.startTest();
         // Active toutes les commandes en bulk
@@ -45,8 +66,17 @@ private class AccountRevenueHandlerTest {
     @isTest
     static void testUpdateAccountRevenue_OnlyActivatedStatus() {
         Account acc = TestDataFactory.createAccount('Test Account', true);
-        Order ord1 = TestDataFactory.createOrder(acc.Id, 'Draft', 1000, 50, Date.today(), true);
-        Order ord2 = TestDataFactory.createOrder(acc.Id, 'Draft', 2000, 50, Date.today(), true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
+        
+        Order ord1 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        Order ord2 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        
+        // Crée des OrderItems pour chaque commande
+        insert new List<OrderItem>{
+            new OrderItem(OrderId = ord1.Id, PricebookEntryId = pbe.Id, Quantity = 10, UnitPrice = 100),
+            new OrderItem(OrderId = ord2.Id, PricebookEntryId = pbe.Id, Quantity = 20, UnitPrice = 100)
+        };
         
         Test.startTest();
         // Active seulement la première commande, laisse la seconde en Draft

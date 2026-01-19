@@ -7,13 +7,33 @@ private class UpdateAllAccountsTest {
     @isTest
     static void testUpdateAllAccounts_BatchExecution() {
         List<Account> accounts = TestDataFactory.createAccounts(3, true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
         
-        // Crée des commandes activées pour chaque compte avec des montants différents
+        // Crée des commandes en Draft pour chaque compte avec des montants différents
         List<Order> orders = new List<Order>();
         for (Integer i = 0; i < accounts.size(); i++) {
-            orders.add(TestDataFactory.createOrder(accounts[i].Id, 'Activated', 1000 * (i + 1), 50, Date.today(), false));
+            orders.add(TestDataFactory.createOrder(accounts[i].Id, 'Draft', 0, 50, Date.today(), false));
         }
         insert orders;
+        
+        // Crée des OrderItems pour que TotalAmount soit calculé
+        List<OrderItem> orderItems = new List<OrderItem>();
+        for (Integer i = 0; i < orders.size(); i++) {
+            orderItems.add(new OrderItem(
+                OrderId = orders[i].Id,
+                PricebookEntryId = pbe.Id,
+                Quantity = 10 * (i + 1),
+                UnitPrice = 100
+            ));
+        }
+        insert orderItems;
+        
+        // Active toutes les commandes
+        for (Order ord : orders) {
+            ord.Status = 'Activated';
+        }
+        update orders;
         
         Test.startTest();
         // Exécute le batch
@@ -32,10 +52,25 @@ private class UpdateAllAccountsTest {
     @isTest
     static void testUpdateAllAccounts_OnlyAccountsWithActivatedOrders() {
         List<Account> accounts = TestDataFactory.createAccounts(3, true);
-        // Crée des commandes avec différents statuts
-        TestDataFactory.createOrder(accounts[0].Id, 'Activated', 1000, 50, Date.today(), true);
-        TestDataFactory.createOrder(accounts[1].Id, 'Draft', 2000, 50, Date.today(), true);
-        TestDataFactory.createOrder(accounts[2].Id, 'Activated', 3000, 50, Date.today(), true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
+        
+        // Crée des commandes en Draft
+        Order ord1 = TestDataFactory.createOrder(accounts[0].Id, 'Draft', 0, 50, Date.today(), true);
+        Order ord2 = TestDataFactory.createOrder(accounts[1].Id, 'Draft', 0, 50, Date.today(), true);
+        Order ord3 = TestDataFactory.createOrder(accounts[2].Id, 'Draft', 0, 50, Date.today(), true);
+        
+        // Crée des OrderItems pour que TotalAmount soit calculé
+        insert new List<OrderItem>{
+            new OrderItem(OrderId = ord1.Id, PricebookEntryId = pbe.Id, Quantity = 10, UnitPrice = 100),
+            new OrderItem(OrderId = ord2.Id, PricebookEntryId = pbe.Id, Quantity = 20, UnitPrice = 100),
+            new OrderItem(OrderId = ord3.Id, PricebookEntryId = pbe.Id, Quantity = 30, UnitPrice = 100)
+        };
+        
+        // Active seulement les commandes 1 et 3
+        ord1.Status = 'Activated';
+        ord3.Status = 'Activated';
+        update new List<Order>{ord1, ord3};
         
         Test.startTest();
         UpdateAllAccounts batch = new UpdateAllAccounts();

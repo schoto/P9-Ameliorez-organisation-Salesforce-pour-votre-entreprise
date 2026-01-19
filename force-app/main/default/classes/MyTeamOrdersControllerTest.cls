@@ -7,8 +7,22 @@ private class MyTeamOrdersControllerTest {
     @isTest
     static void testGetSumOrdersByAccount_WithActivatedOrders() {
         Account acc = TestDataFactory.createAccount('Test Account', true);
-        Order ord1 = TestDataFactory.createOrder(acc.Id, 'Activated', 1000, 50, Date.today(), true);
-        Order ord2 = TestDataFactory.createOrder(acc.Id, 'Activated', 2000, 50, Date.today(), true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
+        
+        Order ord1 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        Order ord2 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        
+        // Crée des OrderItems pour que TotalAmount soit calculé
+        insert new List<OrderItem>{
+            new OrderItem(OrderId = ord1.Id, PricebookEntryId = pbe.Id, Quantity = 10, UnitPrice = 100),
+            new OrderItem(OrderId = ord2.Id, PricebookEntryId = pbe.Id, Quantity = 20, UnitPrice = 100)
+        };
+        
+        // Active les commandes
+        ord1.Status = 'Activated';
+        ord2.Status = 'Activated';
+        update new List<Order>{ord1, ord2};
         
         Test.startTest();
         Decimal total = MyTeamOrdersController.getSumOrdersByAccount(acc.Id);
@@ -22,8 +36,21 @@ private class MyTeamOrdersControllerTest {
     @isTest
     static void testGetSumOrdersByAccount_OnlyActivatedOrders() {
         Account acc = TestDataFactory.createAccount('Test Account', true);
-        Order ord1 = TestDataFactory.createOrder(acc.Id, 'Activated', 1000, 50, Date.today(), true);
-        Order ord2 = TestDataFactory.createOrder(acc.Id, 'Draft', 2000, 50, Date.today(), true);
+        Product2 prod = TestDataFactory.createProduct('Test Product', 'Test', true);
+        PricebookEntry pbe = TestDataFactory.createPricebookEntry(prod.Id, 100, true);
+        
+        Order ord1 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        Order ord2 = TestDataFactory.createOrder(acc.Id, 'Draft', 0, 50, Date.today(), true);
+        
+        // Crée des OrderItems pour que TotalAmount soit calculé
+        insert new List<OrderItem>{
+            new OrderItem(OrderId = ord1.Id, PricebookEntryId = pbe.Id, Quantity = 10, UnitPrice = 100),
+            new OrderItem(OrderId = ord2.Id, PricebookEntryId = pbe.Id, Quantity = 20, UnitPrice = 100)
+        };
+        
+        // Active seulement la première commande
+        ord1.Status = 'Activated';
+        update ord1;
         
         Test.startTest();
         Decimal total = MyTeamOrdersController.getSumOrdersByAccount(acc.Id);

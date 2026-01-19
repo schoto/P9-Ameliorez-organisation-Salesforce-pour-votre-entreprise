@@ -51,6 +51,7 @@ public class TestDataFactory {
     }
     
     // Crée une commande de test
+    // Note : TotalAmount est calculé automatiquement par Salesforce à partir des OrderItems
     // effectiveDate : date d'effet (par défaut aujourd'hui si null)
     public static Order createOrder(Id accountId, String status, Decimal totalAmount, 
                                      Decimal shipmentCost, Date effectiveDate, Boolean withInsert) {
@@ -61,7 +62,6 @@ public class TestDataFactory {
         Order ord = new Order(
             AccountId = accountId,
             Status = status,
-            TotalAmount = totalAmount,
             ShipmentCost__c = shipmentCost,
             EffectiveDate = effectiveDate,
             Pricebook2Id = Test.getStandardPricebookId()
@@ -105,8 +105,8 @@ public class TestDataFactory {
         PricebookEntry pbe = createPricebookEntry(prod.Id, 100, true);
         testData.put('PricebookEntry', pbe);
         
-        // Crée la commande
-        Order ord = createOrder(acc.Id, orderStatus, orderTotalAmount, 50, Date.today(), true);
+        // Crée la commande (sans TotalAmount, il sera calculé automatiquement)
+        Order ord = createOrder(acc.Id, orderStatus, 0, 50, Date.today(), true);
         testData.put('Order', ord);
         
         // Crée les lignes de commande
@@ -123,7 +123,8 @@ public class TestDataFactory {
             orderItems.add(oi);
         }
         insert orderItems;
-        testData.put('OrderItems', orderItems);
+        // Met à jour la commande pour recalculer TotalAmount
+        ord = [SELECT TotalAmount FROM Order WHERE Id = :ord.Id];
         
         return testData;
     }

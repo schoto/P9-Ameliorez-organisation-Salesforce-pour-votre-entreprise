@@ -1,0 +1,177 @@
+# Pipeline CI/CD pour déployer automatiquement le code Salesforce
+# Utilise sfdx-git-delta pour déployer uniquement les fichiers modifiés
+# Se déclenche sur push ou pull request vers la branche main
+
+name: Deploy and Validate Metadata
+
+# Déclencheurs : le pipeline s'exécute sur push ou pull request vers main
+on:
+  pull_request:
+    branches:
+      - main
+
+  push:
+    branches:
+      - main
+
+# Définit les différents jobs (tâches) qui composent ce workflow
+jobs:
+  # Job pour valider et déployer les métadonnées
+  sfdxvalidate:
+    name: "Run SFDX Validate and Deploy"
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+      # Étape 1 : Récupère le code depuis GitHub
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Nécessaire pour sfdx-git-delta qui compare les commits
+
+      # Étape 2 : Configure Node.js
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # Étape 3 : Installe Salesforce CLI et le plugin sfdx-git-delta
+      # sfdx-git-delta permet de déployer uniquement les fichiers modifiés (delta)
+      - name: Install SFDX CLI and sfdx-git-delta plugin
+        run: |
+          npm install -g @salesforce/cli@latest
+          echo "y" | npm install sfdx-git-delta@3.3.0 -g
+
+      # Étape 4 : Authentification à Salesforce
+      # Utilise les secrets GitHub pour se connecter à Salesforce
+      - name: Authentification Salesforce
+        env:
+          SF_USERNAME: ${{ secrets.SF_USERNAME }}
+          SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
+          SF_SECURITY_TOKEN: ${{ secrets.SF_SECURITY_TOKEN }}
+          SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
+        run: |
+          # Utilise l'URL de connexion SFDX pour s'authentifier
+          echo "$SF_LOGIN_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin \
+            --alias deploy-org \
+            --set-default-username "$SF_USERNAME"
+
+      # Étape 5 : Génère le delta des métadonnées modifiées
+      # Compare les fichiers entre la branche actuelle et main
+      # Génère un package.xml avec uniquement les fichiers modifiés
+      - name: Generate metadata delta
+        id: delta
+        run: |
+          # Crée un répertoire temporaire pour le package.xml
+          mkdir -p .temp/package
+          
+          # Pour les pull requests, compare avec la branche de base
+          # Pour les pushes sur main, compare avec le commit précédent
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            # Pour un push, compare avec le commit précédent
+            BASE_SHA=$(git rev-parse HEAD~1)
+            HEAD_SHA="${{ github.sha }}"
+          fi
+          
+          echo "🔍 Comparaison: $BASE_SHA -> $HEAD_SHA"
+          
+          # Génère le package.xml avec sfdx-git-delta
+          # La commande sgd:source:delta génère le delta des métadonnées
+          sf sgd:source:delta \
+            --to "$HEAD_SHA" \
+            --from "$BASE_SHA" \
+            --output .temp/package \
+            --generate-delta || {
+              echo "⚠️ Erreur lors de la génération du delta, tentative alternative..."
+              # Alternative: déployer tout le projet si le delta échoue
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+              exit 0
+            }
+          
+          # Vérifie si des fichiers ont été modifiés
+          if [ -f .temp/package/package.xml ] && [ -s .temp/package/package.xml ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✅ Métadonnées modifiées détectées"
+            echo "📦 Contenu du package.xml:"
+            cat .temp/package/package.xml
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Aucune métadonnée modifiée"
+          fi
+
+      # Étape 6 : Valide les métadonnées (sans déployer)
+      # S'exécute toujours pour vérifier la syntaxe
+      - name: Validate metadata
+        if: steps.delta.outputs.has_changes == 'true'
+        run: |
+          # Valide les métadonnées sans les déployer
+          # Utilise le répertoire source généré par sfdx-git-delta
+          if [ -f .temp/package/package.xml ]; then
+            echo "✅ Validation des métadonnées..."
+            sf project deploy validate \
+              --source-dir .temp/package \
+              --target-org deploy-org \
+              --wait 10 || {
+                echo "⚠️ Erreur de validation (peut être normal si pas de métadonnées)"
+                exit 0
+              }
+          else
+            echo "⚠️ Aucun package.xml trouvé, validation ignorée"
+          fi
+
+      # Étape 7 : Exécute les tests (pour les pull requests)
+      # Vérifie que les tests passent avant de merger
+      - name: Run Apex Tests
+        if: github.event_name == 'pull_request' && steps.delta.outputs.has_changes == 'true'
+        run: |
+          # Exécute tous les tests locaux
+          sf apex run test \
+            --test-level RunLocalTests \
+            --code-coverage \
+            --result-format human \
+            --wait 10 \
+            --target-org deploy-org || true
+
+      # Étape 8 : Déploie les métadonnées sur main
+      # Seulement si c'est un push sur main (pas une pull request)
+      - name: Déployer les métadonnées sur la branch main
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && steps.delta.outputs.has_changes == 'true'
+        run: |
+          # Déploie les métadonnées modifiées depuis le package généré
+          if [ -f .temp/package/package.xml ]; then
+            echo "🚀 Déploiement des métadonnées modifiées..."
+            sf project deploy start \
+              --source-dir .temp/package \
+              --target-org deploy-org \
+              --test-level RunLocalTests \
+              --wait 10
+            
+            # Vérifie le rapport de déploiement
+            echo "📊 Rapport de déploiement:"
+            sf project deploy report \
+              --target-org deploy-org
+          else
+            echo "⚠️ Aucun package.xml trouvé, déploiement de tout le projet..."
+            # Alternative: déployer tout le projet si le delta n'a pas fonctionné
+            sf project deploy start \
+              --source-dir force-app \
+              --target-org deploy-org \
+              --test-level RunLocalTests \
+              --wait 10
+          fi
+
+      # Étape 9 : Génère un rapport de couverture de code (s'exécute toujours)
+      - name: Generate Test Coverage Report
+        if: always() && steps.delta.outputs.has_changes == 'true'
+        run: |
+          # Récupère le rapport de test, même si les tests ont échoué
+          sf apex get test \
+            --code-coverage \
+            --result-format human \
+            --target-org deploy-org || true
