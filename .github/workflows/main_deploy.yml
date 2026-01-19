@@ -140,9 +140,10 @@ jobs:
             # Utilise l'instance URL depuis le token ou celle fournie
             FINAL_INSTANCE_URL="${INSTANCE_URL_FROM_TOKEN:-https://${INSTANCE_URL}}"
             echo "📍 Instance URL finale: $FINAL_INSTANCE_URL"
-            sf org login access-token \
+            
+            # Syntaxe correcte: le token est passé comme argument positionnel, pas comme flag
+            echo "$ACCESS_TOKEN" | sf org login access-token \
               --instance-url "$FINAL_INSTANCE_URL" \
-              --access-token "$ACCESS_TOKEN" \
               --alias deploy-org \
               --set-default || exit 1
           else
