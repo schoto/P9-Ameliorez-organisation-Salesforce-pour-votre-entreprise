@@ -75,32 +75,41 @@ jobs:
           
           echo "🔐 Authentification à Salesforce..."
           
-          # Supprime l'org existante si elle existe (pour éviter les tokens expirés)
-          sf org delete --target-org deploy-org --no-prompt 2>/dev/null || true
+          # Nettoie complètement toutes les orgs existantes et le cache
+          echo "🧹 Nettoyage des orgs et tokens existants..."
+          sf org list --all 2>/dev/null | grep -q deploy-org && sf org delete --target-org deploy-org --no-prompt 2>/dev/null || true
+          
+          # Supprime le cache des tokens (force une authentification fraîche)
+          rm -rf ~/.sf/orgs/deploy-org 2>/dev/null || true
+          rm -rf ~/.local/share/sf/orgs/deploy-org 2>/dev/null || true
           
           # Combine password + security token (requis pour l'authentification)
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
           # Crée un fichier temporaire avec l'URL SFDX correctement formatée
-          # IMPORTANT: Pas de https:// dans l'URL de base, le préfixe force:// suffit
+          # Format: force://PlatformCLI::TOKEN@login.salesforce.com?username=USER&password=PASS+TOKEN
           SFDX_FILE=$(mktemp)
           echo "force://PlatformCLI::${SF_SECURITY_TOKEN}@login.salesforce.com?username=${SF_USERNAME}&password=${FULL_PASSWORD}" > "$SFDX_FILE"
           
-          echo "🔗 Authentification en cours (nouvelle session)..."
+          echo "🔗 Authentification en cours (session fraîche)..."
           
-          # Utilise le fichier pour s'authentifier avec --no-prompt pour éviter les interactions
+          # Force une authentification complètement nouvelle
           sf org login sfdx-url --sfdx-url-file "$SFDX_FILE" \
             --alias deploy-org \
             --set-default \
-            --no-prompt || {
+            --no-prompt \
+            --json || {
               echo "❌ Erreur d'authentification. Vérifiez vos secrets GitHub."
               echo "💡 Vérifiez que SF_USERNAME, SF_PASSWORD et SF_SECURITY_TOKEN sont corrects"
+              echo "📋 Contenu de l'URL SFDX (masqué): force://PlatformCLI::***@login.salesforce.com?username=${SF_USERNAME}&password=***"
               rm -f "$SFDX_FILE"
               exit 1
             }
           
           # Nettoie le fichier temporaire
           rm -f "$SFDX_FILE"
+          
+          echo "✅ Authentification réussie"
           
           echo "✅ Authentification réussie"
           # Vérifie la connexion
