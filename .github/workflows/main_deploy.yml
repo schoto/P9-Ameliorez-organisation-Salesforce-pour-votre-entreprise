@@ -66,7 +66,6 @@ jobs:
           SF_USERNAME: ${{ secrets.SF_USERNAME }}
           SF_PASSWORD: ${{ secrets.SF_PASSWORD }}
           SF_SECURITY_TOKEN: ${{ secrets.SF_SECURITY_TOKEN }}
-          SF_LOGIN_URL: ${{ secrets.SF_LOGIN_URL }}
         run: |
           # Vérifie que les secrets sont configurés
           if [ -z "$SF_USERNAME" ] || [ -z "$SF_PASSWORD" ] || [ -z "$SF_SECURITY_TOKEN" ]; then
@@ -76,34 +75,21 @@ jobs:
           
           echo "🔐 Authentification à Salesforce..."
           
-          # Détermine l'URL SFDX à utiliser
-          if [ -n "$SF_LOGIN_URL" ] && [[ "$SF_LOGIN_URL" == force://* ]]; then
-            # Si SF_LOGIN_URL contient déjà une URL SFDX complète, l'utiliser directement
-            echo "📋 Utilisation de l'URL SFDX depuis SF_LOGIN_URL"
-            SFDX_URL="$SF_LOGIN_URL"
-          else
-            # Sinon, construire l'URL SFDX à partir des secrets individuels
-            LOGIN_URL="${SF_LOGIN_URL:-https://login.salesforce.com}"
-            # Nettoie l'URL pour éviter les problèmes de formatage
-            LOGIN_URL=$(echo "$LOGIN_URL" | sed 's|^https://https://|https://|' | sed 's|^http://https://|https://|' | sed 's|^force://||')
-            # S'assure que l'URL commence par https://
-            if [[ ! "$LOGIN_URL" == https://* ]]; then
-              LOGIN_URL="https://${LOGIN_URL}"
-            fi
-            # Construit l'URL SFDX complète (les paramètres username et password sont passés tels quels)
-            SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@${LOGIN_URL}?username=${SF_USERNAME}&password=${SF_PASSWORD}"
-            echo "🔗 URL SFDX construite à partir des secrets individuels"
-          fi
+          # Construit l'URL SFDX proprement (sans double https://)
+          LOGIN_URL="https://login.salesforce.com"
+          # Combine password + security token pour l'authentification
+          FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
-          echo "🔗 Tentative d'authentification..."
+          # Construit l'URL SFDX complète
+          SFDX_URL="force://PlatformCLI::${FULL_PASSWORD}@${LOGIN_URL}?username=${SF_USERNAME}"
+          
+          echo "🔗 Authentification en cours..."
           
           # Utilise l'URL SFDX pour s'authentifier
           echo "$SFDX_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin \
             --alias deploy-org \
             --set-default || {
               echo "❌ Erreur d'authentification. Vérifiez vos secrets GitHub."
-              echo "💡 Vérifiez que SF_USERNAME, SF_PASSWORD, SF_SECURITY_TOKEN sont corrects"
-              echo "💡 Ou utilisez SF_LOGIN_URL avec une URL SFDX complète"
               exit 1
             }
           
