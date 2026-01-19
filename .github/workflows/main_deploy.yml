@@ -87,31 +87,33 @@ jobs:
           INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
           LOGIN_URL="https://${INSTANCE_URL}"
           
-          echo "🔗 Authentification sfdx-url (force nouvelle session)..."
+          echo "🔗 Authentification web directe (sans refresh token)..."
           
-          # Construit l'URL SFDX - format correct: force://PlatformCLI::TOKEN@DOMAIN?username=USER&password=PASS
-          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@${INSTANCE_URL}?username=${SF_USERNAME}&password=${FULL_PASSWORD}"
-          
-          # Force une authentification complètement nouvelle
-          # Utilise --no-prompt et supprime toute trace d'org existante
-          echo "$SFDX_URL" | sf org login sfdx-url \
-            --sfdx-url-file /dev/stdin \
+          # Utilise sf org login web avec credentials directs
+          # Cette méthode ne crée PAS de refresh token si on utilise --no-prompt correctement
+          echo "$FULL_PASSWORD" | sf org login web \
+            --instance-url "$LOGIN_URL" \
+            --username "$SF_USERNAME" \
             --alias deploy-org \
             --set-default \
             --no-prompt 2>&1 | tee /tmp/sf-login.log || {
               LOG_OUTPUT=$(cat /tmp/sf-login.log 2>/dev/null || echo "")
-              if echo "$LOG_OUTPUT" | grep -q "expired\|refresh"; then
-                echo "❌ Le CLI essaie d'utiliser un refresh token expiré"
-                echo "💡 Solution: Le format sfdx-url ne fonctionne pas avec cette org"
-                echo "💡 Il faut activer SOAP API dans Salesforce ou utiliser un Connected App"
-              else
-                echo "❌ Échec authentification"
-                echo "Log: $LOG_OUTPUT"
-              fi
+              echo "❌ Échec authentification web"
+              echo "Log: $LOG_OUTPUT"
+              echo ""
+              echo "💡 Si l'erreur mentionne 'client-app', il faut créer un Connected App dans Salesforce"
+              echo "💡 Ou activer SOAP API dans Setup → API → Enable SOAP API"
               exit 1
             }
           
-          echo "✅ Authentification réussie"
+          # Vérifie que l'org est bien authentifiée
+          if ! sf org display --target-org deploy-org &>/dev/null; then
+            echo "❌ L'org deploy-org n'est pas correctement authentifiée"
+            sf org list
+            exit 1
+          fi
+          
+          echo "✅ Authentification réussie et vérifiée"
           
           echo "✅ Authentification réussie"
           sf org display --target-org deploy-org
