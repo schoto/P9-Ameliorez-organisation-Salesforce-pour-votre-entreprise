@@ -87,53 +87,40 @@ jobs:
           INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
           LOGIN_URL="https://${INSTANCE_URL}"
           
-          echo "🔗 Authentification via API REST directe..."
+          echo "🔗 Authentification via API SOAP (sans client_id)..."
           
-          # Utilise l'API REST directement pour obtenir un access token
-          # Cette méthode évite complètement les refresh tokens du CLI
-          TOKEN_RESPONSE=$(curl -s -X POST "${LOGIN_URL}/services/oauth2/token" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=password" \
-            -d "client_id=3MVG9fTLmJ60pJ5LyUYh88ekgGn2hs2GtmS_7qWX8Z6f8Y5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z" \
-            -d "client_secret=PlatformCLI" \
-            -d "username=${SF_USERNAME}" \
-            -d "password=${FULL_PASSWORD}" 2>&1)
+          # Utilise l'API SOAP login qui ne nécessite PAS de client_id
+          SOAP_RESPONSE=$(curl -s -X POST "${LOGIN_URL}/services/Soap/u/60.0" \
+            -H "Content-Type: text/xml; charset=UTF-8" \
+            -H "SOAPAction: login" \
+            -d "<?xml version=\"1.0\" encoding=\"utf-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:urn=\"urn:partner.soap.sforce.com\"><soapenv:Body><urn:login><urn:username>${SF_USERNAME}</urn:username><urn:password>${FULL_PASSWORD}</urn:password></urn:login></soapenv:Body></soapenv:Envelope>" 2>&1)
           
-          # Si ça échoue avec PlatformCLI, essaie sans client_secret (certaines orgs le permettent)
-          if echo "$TOKEN_RESPONSE" | grep -q '"error"'; then
-            echo "⚠️ Tentative sans client_secret..."
-            TOKEN_RESPONSE=$(curl -s -X POST "${LOGIN_URL}/services/oauth2/token" \
-              -H "Content-Type: application/x-www-form-urlencoded" \
-              -d "grant_type=password" \
-              -d "username=${SF_USERNAME}" \
-              -d "password=${FULL_PASSWORD}" 2>&1)
-          fi
-          
-          # Extrait l'access token
-          if echo "$TOKEN_RESPONSE" | grep -q '"access_token"'; then
-            ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*' | sed 's/"access_token":"//')
-            INSTANCE_URL_FROM_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"instance_url":"[^"]*' | sed 's/"instance_url":"//' | sed 's/"$//')
+          # Extrait sessionId et serverUrl depuis la réponse SOAP
+          if echo "$SOAP_RESPONSE" | grep -q "<sessionId>"; then
+            SESSION_ID=$(echo "$SOAP_RESPONSE" | grep -o "<sessionId>[^<]*" | sed 's/<sessionId>//')
+            SERVER_URL=$(echo "$SOAP_RESPONSE" | grep -o "<serverUrl>[^<]*" | sed 's/<serverUrl>//')
+            INSTANCE_URL_SOAP=$(echo "$SERVER_URL" | sed 's|https://\([^/]*\).*|\1|')
             
-            if [ -z "$ACCESS_TOKEN" ] || [ -z "$INSTANCE_URL_FROM_TOKEN" ]; then
-              echo "❌ Impossible d'extraire token ou instance URL"
-              echo "Réponse: $TOKEN_RESPONSE"
+            if [ -z "$SESSION_ID" ] || [ -z "$INSTANCE_URL_SOAP" ]; then
+              echo "❌ Impossible d'extraire sessionId ou instance URL"
+              echo "Réponse: $SOAP_RESPONSE"
               exit 1
             fi
             
-            echo "✅ Token obtenu, authentification de l'org..."
+            echo "✅ Session obtenue, authentification de l'org..."
             
-            # Utilise l'access token pour s'authentifier (sans refresh token)
+            # Utilise l'access token (sessionId) pour s'authentifier
             sf org login access-token \
-              --instance-url "$INSTANCE_URL_FROM_TOKEN" \
-              --access-token "$ACCESS_TOKEN" \
+              --instance-url "https://${INSTANCE_URL_SOAP}" \
+              --access-token "$SESSION_ID" \
               --alias deploy-org \
               --set-default || {
-                echo "❌ Échec authentification avec access token"
+                echo "❌ Échec authentification avec sessionId"
                 exit 1
               }
           else
-            echo "❌ Échec obtention du token OAuth2"
-            echo "Réponse: $TOKEN_RESPONSE"
+            echo "❌ Échec login SOAP"
+            echo "Réponse: $SOAP_RESPONSE"
             exit 1
           fi
           
