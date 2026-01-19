@@ -85,9 +85,17 @@ jobs:
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
           # Détermine l'URL d'instance
-          INSTANCE_URL="${SF_INSTANCE_URL:-login.salesforce.com}"
+          # Pour les orgs personnalisées, utilise l'URL fournie, sinon login.salesforce.com
+          if [ -n "$SF_INSTANCE_URL" ]; then
+            INSTANCE_URL="$SF_INSTANCE_URL"
+          else
+            INSTANCE_URL="login.salesforce.com"
+          fi
+          # Nettoie l'URL
           INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
           LOGIN_URL="https://${INSTANCE_URL}"
+          
+          echo "📍 Instance URL utilisée: $LOGIN_URL"
           
           echo "🔗 Authentification OAuth2..."
           
