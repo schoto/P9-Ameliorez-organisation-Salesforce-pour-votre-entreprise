@@ -82,21 +82,49 @@ jobs:
           # Combine password + security token
           FULL_PASSWORD="${SF_PASSWORD}${SF_SECURITY_TOKEN}"
           
-          # Détermine l'URL d'instance (utilise celle fournie ou login.salesforce.com par défaut)
+          # Détermine l'URL d'instance
           INSTANCE_URL="${SF_INSTANCE_URL:-login.salesforce.com}"
-          # Nettoie l'URL : enlève https://, http://, et trailing slash
           INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
+          LOGIN_URL="https://${INSTANCE_URL}"
           
-          # Construit l'URL SFDX - IMPORTANT: pas de https:// dans l'URL de base pour sfdx-url
-          # Format: force://PlatformCLI::TOKEN@DOMAIN?username=USER&password=PASS
-          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@${INSTANCE_URL}?username=${SF_USERNAME}&password=${FULL_PASSWORD}"
+          echo "🔗 Authentification OAuth2 directe (sans refresh token)..."
           
-          echo "🔗 Authentification avec instance: $INSTANCE_URL"
-          echo "$SFDX_URL" | sf org login sfdx-url --sfdx-url-file /dev/stdin --alias deploy-org --set-default --no-prompt || {
-              echo "❌ Échec authentification"
-              echo "💡 Vérifiez: username, password, security token, et instance URL"
+          # Obtient un access token directement via OAuth2 username/password flow
+          # Cette méthode évite complètement les refresh tokens
+          RESPONSE=$(curl -s -X POST "${LOGIN_URL}/services/oauth2/token" \
+            -d "grant_type=password" \
+            -d "client_id=PlatformCLI" \
+            -d "client_secret=${SF_SECURITY_TOKEN}" \
+            -d "username=${SF_USERNAME}" \
+            -d "password=${FULL_PASSWORD}" 2>&1)
+          
+          # Vérifie si la réponse contient un access_token
+          if echo "$RESPONSE" | grep -q '"access_token"'; then
+            ACCESS_TOKEN=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+            INSTANCE_URL_FROM_TOKEN=$(echo "$RESPONSE" | grep -o '"instance_url":"[^"]*' | cut -d'"' -f4)
+            
+            if [ -z "$ACCESS_TOKEN" ]; then
+              echo "❌ Impossible d'extraire l'access token"
+              echo "Réponse: $RESPONSE"
               exit 1
-            }
+            fi
+            
+            echo "✅ Token obtenu, authentification de l'org..."
+            
+            # Utilise l'access token pour s'authentifier
+            sf org login access-token \
+              --instance-url "${INSTANCE_URL_FROM_TOKEN:-$LOGIN_URL}" \
+              --access-token "$ACCESS_TOKEN" \
+              --alias deploy-org \
+              --set-default || {
+                echo "❌ Échec authentification avec access token"
+                exit 1
+              }
+          else
+            echo "❌ Échec obtention du token OAuth2"
+            echo "Réponse: $RESPONSE"
+            exit 1
+          fi
           
           echo "✅ Authentification réussie"
           sf org display --target-org deploy-org
