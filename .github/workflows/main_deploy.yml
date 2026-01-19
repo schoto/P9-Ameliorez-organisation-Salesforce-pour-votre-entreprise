@@ -102,6 +102,15 @@ jobs:
             echo "📋 Utilisation du Consumer Key par défaut (peut ne pas fonctionner)"
           fi
           
+          # Nettoie les secrets (enlève espaces/retours à la ligne)
+          CLIENT_ID=$(echo "$CLIENT_ID" | tr -d '[:space:]')
+          CLIENT_SECRET=$(echo "$CLIENT_SECRET" | tr -d '[:space:]')
+          
+          echo "🔍 Vérification des paramètres..."
+          echo "   Instance URL: $LOGIN_URL"
+          echo "   Username: ${SF_USERNAME}"
+          echo "   Consumer Key: ${CLIENT_ID:0:20}..." # Affiche seulement les 20 premiers caractères
+          
           TOKEN_RESPONSE=$(curl -s -X POST "${LOGIN_URL}/services/oauth2/token" \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "grant_type=password" \
@@ -124,14 +133,17 @@ jobs:
               --set-default || exit 1
           else
             echo "❌ Échec OAuth2"
-            echo "$TOKEN_RESPONSE"
+            echo "Réponse complète: $TOKEN_RESPONSE"
             echo ""
-            echo "🔧 SOLUTION: Créez un Connected App dans Salesforce:"
-            echo "   1. Setup → App Manager → New Connected App"
-            echo "   2. Enable OAuth Settings"
-            echo "   3. Callback URL: http://localhost:1717/OauthRedirect"
-            echo "   4. Scopes: api, refresh_token, offline_access"
-            echo "   5. Ajoutez SF_CONSUMER_KEY et SF_CONSUMER_SECRET dans GitHub Secrets"
+            ERROR_TYPE=$(echo "$TOKEN_RESPONSE" | grep -o '"error":"[^"]*' | cut -d'"' -f4)
+            if [ "$ERROR_TYPE" = "invalid_grant" ]; then
+              echo "🔍 Erreur 'invalid_grant' = problème d'authentification"
+              echo "   Vérifiez:"
+              echo "   1. Username et Password sont corrects dans GitHub Secrets"
+              echo "   2. Security Token est correct et à jour"
+              echo "   3. Connected App a 'Enable Authorization Code and Credentials Flow' activé"
+              echo "   4. Connected App a les scopes: api, refresh_token, offline_access"
+            fi
             exit 1
           fi
           
