@@ -87,42 +87,31 @@ jobs:
           INSTANCE_URL=$(echo "$INSTANCE_URL" | sed 's|^https://||' | sed 's|^http://||' | sed 's|/$||')
           LOGIN_URL="https://${INSTANCE_URL}"
           
-          echo "🔗 Authentification via API SOAP (sans client_id)..."
+          echo "🔗 Authentification sfdx-url (force nouvelle session)..."
           
-          # Utilise l'API SOAP login qui ne nécessite PAS de client_id
-          SOAP_RESPONSE=$(curl -s -X POST "${LOGIN_URL}/services/Soap/u/60.0" \
-            -H "Content-Type: text/xml; charset=UTF-8" \
-            -H "SOAPAction: login" \
-            -d "<?xml version=\"1.0\" encoding=\"utf-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:urn=\"urn:partner.soap.sforce.com\"><soapenv:Body><urn:login><urn:username>${SF_USERNAME}</urn:username><urn:password>${FULL_PASSWORD}</urn:password></urn:login></soapenv:Body></soapenv:Envelope>" 2>&1)
+          # Construit l'URL SFDX - format correct: force://PlatformCLI::TOKEN@DOMAIN?username=USER&password=PASS
+          SFDX_URL="force://PlatformCLI::${SF_SECURITY_TOKEN}@${INSTANCE_URL}?username=${SF_USERNAME}&password=${FULL_PASSWORD}"
           
-          # Extrait sessionId et serverUrl depuis la réponse SOAP
-          if echo "$SOAP_RESPONSE" | grep -q "<sessionId>"; then
-            SESSION_ID=$(echo "$SOAP_RESPONSE" | grep -o "<sessionId>[^<]*" | sed 's/<sessionId>//')
-            SERVER_URL=$(echo "$SOAP_RESPONSE" | grep -o "<serverUrl>[^<]*" | sed 's/<serverUrl>//')
-            INSTANCE_URL_SOAP=$(echo "$SERVER_URL" | sed 's|https://\([^/]*\).*|\1|')
-            
-            if [ -z "$SESSION_ID" ] || [ -z "$INSTANCE_URL_SOAP" ]; then
-              echo "❌ Impossible d'extraire sessionId ou instance URL"
-              echo "Réponse: $SOAP_RESPONSE"
+          # Force une authentification complètement nouvelle
+          # Utilise --no-prompt et supprime toute trace d'org existante
+          echo "$SFDX_URL" | sf org login sfdx-url \
+            --sfdx-url-file /dev/stdin \
+            --alias deploy-org \
+            --set-default \
+            --no-prompt 2>&1 | tee /tmp/sf-login.log || {
+              LOG_OUTPUT=$(cat /tmp/sf-login.log 2>/dev/null || echo "")
+              if echo "$LOG_OUTPUT" | grep -q "expired\|refresh"; then
+                echo "❌ Le CLI essaie d'utiliser un refresh token expiré"
+                echo "💡 Solution: Le format sfdx-url ne fonctionne pas avec cette org"
+                echo "💡 Il faut activer SOAP API dans Salesforce ou utiliser un Connected App"
+              else
+                echo "❌ Échec authentification"
+                echo "Log: $LOG_OUTPUT"
+              fi
               exit 1
-            fi
-            
-            echo "✅ Session obtenue, authentification de l'org..."
-            
-            # Utilise l'access token (sessionId) pour s'authentifier
-            sf org login access-token \
-              --instance-url "https://${INSTANCE_URL_SOAP}" \
-              --access-token "$SESSION_ID" \
-              --alias deploy-org \
-              --set-default || {
-                echo "❌ Échec authentification avec sessionId"
-                exit 1
-              }
-          else
-            echo "❌ Échec login SOAP"
-            echo "Réponse: $SOAP_RESPONSE"
-            exit 1
-          fi
+            }
+          
+          echo "✅ Authentification réussie"
           
           echo "✅ Authentification réussie"
           sf org display --target-org deploy-org
