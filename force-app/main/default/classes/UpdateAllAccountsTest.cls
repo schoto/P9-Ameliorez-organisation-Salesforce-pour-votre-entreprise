@@ -42,10 +42,10 @@ private class UpdateAllAccountsTest {
         Test.stopTest();
         
         // Vérifie que le CA a été mis à jour correctement pour chaque compte
-        List<Account> accountsAfter = [SELECT Chiffre_d_affaire__c FROM Account WHERE Id IN :accounts ORDER BY Id];
-        System.assertEquals(1000, accountsAfter[0].Chiffre_d_affaire__c);
-        System.assertEquals(2000, accountsAfter[1].Chiffre_d_affaire__c);
-        System.assertEquals(3000, accountsAfter[2].Chiffre_d_affaire__c);
+        List<Account> accountsAfter = [SELECT Chiffre_d_affaire_c FROM Account WHERE Id IN :accounts ORDER BY Id];
+        System.assertEquals(1000, accountsAfter[0].Chiffre_d_affaire_c);
+        System.assertEquals(2000, accountsAfter[1].Chiffre_d_affaire_c);
+        System.assertEquals(3000, accountsAfter[2].Chiffre_d_affaire_c);
     }
     
     // Test : seuls les comptes avec des commandes activées sont mis à jour
@@ -78,9 +78,9 @@ private class UpdateAllAccountsTest {
         Test.stopTest();
         
         // Vérifie que seul le compte avec commande activée a été mis à jour
-        List<Account> accountsAfter = [SELECT Chiffre_d_affaire__c FROM Account WHERE Id IN :accounts ORDER BY Id];
-        System.assertEquals(1000, accountsAfter[0].Chiffre_d_affaire__c); // Activée
-        System.assertEquals(null, accountsAfter[1].Chiffre_d_affaire__c); // Draft, non mise à jour
-        System.assertEquals(3000, accountsAfter[2].Chiffre_d_affaire__c); // Activée
+        List<Account> accountsAfter = [SELECT Chiffre_d_affaire_c FROM Account WHERE Id IN :accounts ORDER BY Id];
+        System.assertEquals(1000, accountsAfter[0].Chiffre_d_affaire_c); // Activée
+        System.assertEquals(null, accountsAfter[1].Chiffre_d_affaire_c); // Draft, non mise à jour
+        System.assertEquals(3000, accountsAfter[2].Chiffre_d_affaire_c); // Activée
     }
 }

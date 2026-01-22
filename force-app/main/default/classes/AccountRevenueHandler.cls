@@ -39,16 +39,16 @@ public with sharing class AccountRevenueHandler {
         
         // Requête unique pour récupérer tous les comptes concernés (bulk)
         List<Account> accountsToUpdate = [
-            SELECT Id, Chiffre_d_affaire__c 
+            SELECT Id, Chiffre_d_affaire_c 
             FROM Account 
             WHERE Id IN :accountIds
         ];
         
         // Met à jour le chiffre d'affaires de chaque compte
         for (Account acc : accountsToUpdate) {
-            Decimal currentRevenue = acc.Chiffre_d_affaire__c != null ? acc.Chiffre_d_affaire__c : 0;
+            Decimal currentRevenue = acc.Chiffre_d_affaire_c != null ? acc.Chiffre_d_affaire_c : 0;
             Decimal additionalRevenue = accountRevenueMap.get(acc.Id);
-            acc.Chiffre_d_affaire__c = currentRevenue + additionalRevenue;
+            acc.Chiffre_d_affaire_c = currentRevenue + additionalRevenue;
         }
         
         // Mise à jour groupée de tous les comptes (bulk)

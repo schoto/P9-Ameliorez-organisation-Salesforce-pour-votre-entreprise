@@ -29,7 +29,7 @@ private class testUpdateAllAccounts {
         
         // Vérifie que le trigger a mis à jour le CA du compte automatiquement
         // Le CA doit être égal au TotalAmount de la commande (pas orderTotalAmount qui inclut ShipmentCost)
-        Account accAfter = [SELECT Chiffre_d_affaire__c FROM Account WHERE Id = :acc1.Id];
-        System.assertEquals(expectedRevenue, accAfter.Chiffre_d_affaire__c, 'Le CA doit être égal au TotalAmount de la commande activée');
+        Account accAfter = [SELECT Chiffre_d_affaire_c FROM Account WHERE Id = :acc1.Id];
+        System.assertEquals(expectedRevenue, accAfter.Chiffre_d_affaire_c, 'Le CA doit être égal au TotalAmount de la commande activée');
     }
 }
