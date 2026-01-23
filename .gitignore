@@ -39,13 +39,6 @@ $RECYCLE.BIN/
 # Local environment variables
 .env
 
-# Fichiers contenant des secrets (NE JAMAIS COMMITTER!)
-*SECRETS*.md
-*secrets*.md
-*SECRET*.md
-generate-secrets.ps1
-generate-secrets.sh
-
 # Python Salesforce Functions
 **/__pycache__/
 **/.venv/

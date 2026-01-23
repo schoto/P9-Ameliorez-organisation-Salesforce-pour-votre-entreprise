@@ -39,4 +39,3 @@ Après le déploiement, connectez-vous à votre organisation Salesforce et véri
 ## Ressources supplémentaires
 - [Salesforce Developer Documentation](https://developer.salesforce.com/docs)
 - [Guide d'utilisation de Salesforce CLI](https://developer.salesforce.com/tools/sfdxcli)
-
