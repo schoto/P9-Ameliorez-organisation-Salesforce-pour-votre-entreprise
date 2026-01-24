@@ -27,8 +27,8 @@ private class AccountRevenueHandlerTest {
         Test.stopTest();
         
         // Vérifie que le chiffre d'affaires a été mis à jour
-        Account accAfter = [SELECT Chiffre_d_affaire_c FROM Account WHERE Id = :acc.Id];
-        System.assertEquals(1000, accAfter.Chiffre_d_affaire_c);
+        Account accAfter = [SELECT Chiffre_d_affaire__c FROM Account WHERE Id = :acc.Id];
+        System.assertEquals(1000, accAfter.Chiffre_d_affaire__c);
     }
     
     // Test : mise à jour du CA avec plusieurs commandes activées en même temps
@@ -58,8 +58,8 @@ private class AccountRevenueHandlerTest {
         Test.stopTest();
         
         // Vérifie que le CA est la somme de toutes les commandes (1000 + 2000 + 3000 = 6000)
-        Account accAfter = [SELECT Chiffre_d_affaire_c FROM Account WHERE Id = :acc.Id];
-        System.assertEquals(6000, accAfter.Chiffre_d_affaire_c);
+        Account accAfter = [SELECT Chiffre_d_affaire__c FROM Account WHERE Id = :acc.Id];
+        System.assertEquals(6000, accAfter.Chiffre_d_affaire__c);
     }
     
     // Test : seules les commandes activées sont comptabilisées
@@ -86,7 +86,7 @@ private class AccountRevenueHandlerTest {
         Test.stopTest();
         
         // Vérifie que seul le montant de la commande activée est comptabilisé
-        Account accAfter = [SELECT Chiffre_d_affaire_c FROM Account WHERE Id = :acc.Id];
-        System.assertEquals(1000, accAfter.Chiffre_d_affaire_c);
+        Account accAfter = [SELECT Chiffre_d_affaire__c FROM Account WHERE Id = :acc.Id];
+        System.assertEquals(1000, accAfter.Chiffre_d_affaire__c);
     }
 }

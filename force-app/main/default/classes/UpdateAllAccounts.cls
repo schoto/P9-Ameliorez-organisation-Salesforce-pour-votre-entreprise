@@ -6,7 +6,7 @@ global class UpdateAllAccounts implements Database.Batchable<sObject> {
     // Ne récupère que les comptes ayant au moins une commande activée
     global Database.QueryLocator start(Database.BatchableContext info) {
         return Database.getQueryLocator([
-            SELECT Id, Chiffre_d_affaire_c 
+            SELECT Id, Chiffre_d_affaire__c 
             FROM Account 
             WHERE Id IN (
                 SELECT AccountId 
@@ -45,12 +45,12 @@ global class UpdateAllAccounts implements Database.Batchable<sObject> {
             accountRevenueMap.put(accountId, totalRevenue);
         }
         
-        // Met à jour le champ Chiffre_d_affaire_c pour chaque compte
+        // Met à jour le champ Chiffre_d_affaire__c pour chaque compte
         List<Account> accountsToUpdate = new List<Account>();
         for (Account acc : scope) {
             Decimal newRevenue = accountRevenueMap.get(acc.Id);
             if (newRevenue != null) {
-                acc.Chiffre_d_affaire_c = newRevenue;
+                acc.Chiffre_d_affaire__c = newRevenue;
                 accountsToUpdate.add(acc);
             }
         }
